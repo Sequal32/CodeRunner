@@ -1,17 +1,21 @@
 -- Paths
 local PluginFolder = script.Parent
 -- UIs
-local CoreUI = game:GetService("StarterGui").CodeRunner.Core
+local CoreUI = game:GetService("StarterGui").CodeRunner.Core:Clone()
 local ListUI = CoreUI.FunctionList
 local TopUI = CoreUI.TopBar
 local PromptUI = CoreUI.Prompt
+local DoneUI = CoreUI.Done
 
 local Entry = PluginFolder.FunctionEntry
 
 -- Init the plugin
 plugin:CreatePluginMenu(math.random(), "Code Runner", "")
-plugin:CreateDockWidgetPluginGui(math.random(), DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, true, false, 200, 360))
+local UI = plugin:CreateDockWidgetPluginGui(math.random(), DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, true, false, 200, 360))
 
+CoreUI.Position = UDim2.fromScale(0, 0)
+CoreUI.Size = UDim2.fromScale(1, 1)
+CoreUI.Parent = UI
 -- Running variables
 local SavedFunctions = plugin:GetSetting("SavedFunctions") or {}
 local Functions = {}
@@ -22,23 +26,24 @@ local IsEditing = false
 
 function AddEntry(FunctionName)
     local Frame = Entry:Clone()
+    local Buttons = Frame.Buttons
     Frame.Name = FunctionName
     Frame.FunctionName.Text = FunctionName
     Frame.Parent = ListUI
 
     Frame.MouseEnter:Connect(function()
-        Frame.Edit.Visible = true 
-        Frame.Trash.Visible = true
-        Frame.Run.Visible = true
+        Buttons.Edit.Visible = true 
+        Buttons.Trash.Visible = true
+        Buttons.Run.Visible = true
     end)
 
     Frame.MouseLeave:Connect(function()
-        Frame.Edit.Visible = false 
-        Frame.Trash.Visible = false
-        Frame.Run.Visible = true
+        Buttons.Edit.Visible = false 
+        Buttons.Trash.Visible = false
+        Buttons.Run.Visible = false
     end)
 
-    Frame.Run.Activated:Connect(function()
+    Buttons.Run.Activated:Connect(function()
         for _,Object in pairs(game.Selection:Get()) do
             Functions[FunctionName](Object)
         end
@@ -69,20 +74,31 @@ function NewScript()
 
     IsEditing = true
     CurrentScript = PluginFolder.Template:Clone()
-    plugin:OpenScript(Script)
+    plugin:OpenScript(CurrentScript)
+
+    DoneUI.Visible = true
+    ListUI.Visible = false
 end
 
 function SaveScript()
+    if not IsEditing or not DoneUI.Visible then return end
+
+    DoneUI.Visible = false
     -- Close the script
     local Source = CurrentScript.Source
     CurrentScript:Destroy()
     -- Load the script
-    local FunctionName, Function = require(Source.."\n\n"..PluginFolder.Parser.Source)
+    local NewScript = Instance.new("ModuleScript")
+    NewScript.Source = Source.."\n\n"..PluginFolder.Parser.Source
+
+    local Result = require(NewScript)
     local Exists = Functions[FunctionName]
     -- If there was no function written
-    if not Function then warn("No function was found!")
+    if not Result then warn("No function was found!"); IsEditing = false return end
+
+    FunctionName, Function = unpack(Result)
     -- If we're about to overwrite a function
-    if Exists and not Prompt("Overwrite "..FunctionName.."?") then return end
+    if Exists and not Prompt("Overwrite "..FunctionName.."?") then IsEditing = false return end
     
     SavedFunctions[FunctionName] = Source
     Functions[FunctionName] = Function
@@ -93,11 +109,13 @@ function SaveScript()
     -- Save the script in storage
     plugin:SetSetting("SavedFunctions", SavedFunctions)
 
+    ListUI.Visible = true
     IsEditing = false
 end
 
 PromptUI.Yes.Activated:Connect(function() Response = true end)
 PromptUI.No.Activated:Connect(function() Response = false end)
 
+DoneUI.Activated:Connect(SaveScript)
 CoreUI.Done.Activated:Connect(SaveScript)
 TopUI.Add.Activated:Connect(NewScript)
