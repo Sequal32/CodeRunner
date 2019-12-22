@@ -1,20 +1,19 @@
 -- Paths
 local PluginFolder = script.Parent
 -- UIs
-local CoreUI = game:GetService("StarterGui").CodeRunner.Core:Clone()
+local CoreUI = PluginFolder.UIs.Core
 local ListUI = CoreUI.FunctionList
 local TopUI = CoreUI.TopBar
 local PromptUI = CoreUI.Prompt
 local DoneUI = CoreUI.Done
 
-local Entry = PluginFolder.FunctionEntry
+local Entry = PluginFolder.UIs.FunctionEntry
 
 -- Init the plugin
-plugin:CreatePluginMenu(math.random(), "Code Runner", "")
-local UI = plugin:CreateDockWidgetPluginGui(math.random(), DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, true, false, 200, 360))
+local Toolbar = plugin:CreateToolbar("Code Runner")
+local OpenButton = Toolbar:CreateButton("Open UI", "Opens the UI for Code Runner", "rbxassetid://4532598287")
 
-CoreUI.Position = UDim2.fromScale(0, 0)
-CoreUI.Size = UDim2.fromScale(1, 1)
+local UI = plugin:CreateDockWidgetPluginGui(math.random(), DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, true, false, 200, 360))
 CoreUI.Parent = UI
 -- Running variables
 local SavedFunctions = plugin:GetSetting("SavedFunctions") or {}
@@ -23,6 +22,10 @@ local Functions = {}
 local CurrentScript = nil
 local CurrentResponse = nil
 local IsEditing = false
+
+function ToggleUI()
+    UI.Enabled = not UI.Enabled
+end
 
 function AddEntry(FunctionName)
     local Frame = Entry:Clone()
@@ -45,9 +48,10 @@ function AddEntry(FunctionName)
 
     Buttons.Run.Activated:Connect(function()
         local Selection = game.Selection:Get()
+        local Function = Functions[FunctionName]
 
         for _,Object in pairs(Selection) do
-            Functions[FunctionName](Object)
+            Function(Object)
         end
     end)
 
@@ -85,7 +89,6 @@ function Prompt(Message)
     PromptUI.Message.Text = Message
 
     Response = nil
-    print("Waiting")
     repeat wait() until Response ~= nil -- Will wait until one of the buttons is pressed
 
     PromptUI.Visible = false
@@ -120,11 +123,11 @@ function SaveScript()
     CurrentScript:Destroy()
     -- Load the script
     local Result = LoadScript(Source, true)
-    local Exists = SavedFunctions[FunctionName] == nil
     -- If there was no function written
     if not Result then warn("No function was found!"); IsEditing = false return end
 
-    FunctionName, Function = unpack(Result)
+    local FunctionName, Function = unpack(Result)
+    local Exists = SavedFunctions[FunctionName] ~= nil
     -- If we're about to overwrite a function
     if Exists and not Prompt("Overwrite "..FunctionName.."?") then IsEditing = false return end
     
@@ -153,3 +156,5 @@ PromptUI.No.Activated:Connect(function() Response = false end)
 DoneUI.Activated:Connect(SaveScript)
 CoreUI.Done.Activated:Connect(SaveScript)
 TopUI.Add.Activated:Connect(NewScript)
+
+OpenButton.Click:Connect(ToggleUI)
