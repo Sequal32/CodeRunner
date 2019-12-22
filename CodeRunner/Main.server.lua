@@ -6,14 +6,16 @@ local ListUI = CoreUI.FunctionList
 local TopUI = CoreUI.TopBar
 local PromptUI = CoreUI.Prompt
 local DoneUI = CoreUI.Done
+local NotifyUI = CoreUI.Notify
 
 local Entry = PluginFolder.UIs.FunctionEntry
 
 -- Init the plugin
 local Toolbar = plugin:CreateToolbar("Code Runner")
-local OpenButton = Toolbar:CreateButton("Open UI", "Opens the UI for Code Runner", "rbxassetid://4532598287")
+local OpenButton = Toolbar:CreateButton(math.random(), "Opens the UI for Code Runner", "rbxassetid://4532598281", "Open UI")
 
-local UI = plugin:CreateDockWidgetPluginGui(math.random(), DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, true, false, 200, 360))
+local UI = plugin:CreateDockWidgetPluginGui(math.random(), DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 200, 360))
+UI.Title = "Code Runner"
 CoreUI.Parent = UI
 -- Running variables
 local SavedFunctions = plugin:GetSetting("SavedFunctions") or {}
@@ -61,6 +63,7 @@ function AddEntry(FunctionName)
     end)
 
     Buttons.Trash.Activated:Connect(function()
+        if not Prompt("Delete "..FunctionName.."?") then return end
         Functions[FunctionName] = nil
         SavedFunctions[FunctionName] = nil
         Frame:Destroy()
@@ -69,7 +72,7 @@ function AddEntry(FunctionName)
     end)
 
     -- Adjust size of the scrolling frame 
-    ListUI.CanvasSize = UDim2.fromOffset(0, #ListUI:GetChildren()-1 * Entry.Size.Y.Offset)
+    ListUI.CanvasSize = UDim2.fromOffset(0, ListUI.CanvasSize.Y.Offset + Entry.Size.Y.Offset)
 end
 
 
@@ -97,6 +100,17 @@ function Prompt(Message)
     return Response
 end
 
+function Notify(Message)
+    ListUI.Visible = false
+    NotifyUI.Visible = true
+
+    NotifyUI.Text.Text = Message
+    NotifyUI.Yes.Activated:Wait()
+
+    ListUI.Visible = true
+    NotifyUI.Visible = false
+end
+
 function NewScript()
     if IsEditing then return end
     CurrentScript = PluginFolder.Template:Clone()
@@ -106,7 +120,17 @@ end
 function LoadScript(Source, Parse)
     CurrentScript = Instance.new("ModuleScript")
     CurrentScript.Source = Source..(Parse and "\n\n"..PluginFolder.Parser.Source or "")
-    return Parse and require(CurrentScript)
+
+    if Parse then
+        local Result
+        local Success, Message = pcall(function() 
+            Result = require(CurrentScript) 
+        end)
+
+        return Success, Message, Result
+    end
+
+    return 
 end
 
 function EditScript(FunctionName)
@@ -122,10 +146,13 @@ function SaveScript()
     local Source = CurrentScript.Source
     CurrentScript:Destroy()
     -- Load the script
-    local Result = LoadScript(Source, true)
-    -- If there was no function written
-    if not Result then warn("No function was found!"); IsEditing = false return end
+    local Success, Message, Result = LoadScript(Source, true)
+    -- If there was an error parsing the script
+    if not Success then Notify(Message); IsEditing = false return end
 
+    -- If there was no function written
+    if not Result then Notify("You have not written a function!"); IsEditing = false return end
+    
     local FunctionName, Function = unpack(Result)
     local Exists = SavedFunctions[FunctionName] ~= nil
     -- If we're about to overwrite a function
@@ -146,8 +173,14 @@ end
 
 -- Load in functions from storage
 for FunctionName,Source in pairs(SavedFunctions) do
-    Functions[FunctionName] = LoadScript(Source, true)[2]
-    AddEntry(FunctionName)
+    local Success, _, Result = LoadScript(Source, true)
+
+    if Success then
+        Functions[FunctionName] = Result[2]
+        AddEntry(FunctionName)
+    else
+        SavedFunctions[FunctionName] = nil
+    end
 end
 
 PromptUI.Yes.Activated:Connect(function() Response = true end)
