@@ -44,23 +44,48 @@ function AddEntry(FunctionName)
     end)
 
     Buttons.Run.Activated:Connect(function()
-        for _,Object in pairs(game.Selection:Get()) do
+        local Selection = game.Selection:Get()
+
+        for _,Object in pairs(Selection) do
             Functions[FunctionName](Object)
         end
+    end)
+
+    Buttons.Edit.Activated:Connect(function()
+        if IsEditing then return end
+        EditScript(FunctionName)
+    end)
+
+    Buttons.Trash.Activated:Connect(function()
+        Functions[FunctionName] = nil
+        SavedFunctions[FunctionName] = nil
+        Frame:Destroy()
+
+        plugin:SetSetting("SavedFunctions", SavedFunctions)
     end)
 
     -- Adjust size of the scrolling frame 
     ListUI.CanvasSize = UDim2.fromOffset(0, #ListUI:GetChildren()-1 * Entry.Size.Y.Offset)
 end
 
+
+function Edit(FunctionName)
+    IsEditing = true
+    DoneUI.Visible = true
+    ListUI.Visible = false
+
+    CurrentScript.Name = FunctionName
+    plugin:OpenScript(CurrentScript)
+end
 -- Returns true if yes was clicked
 function Prompt(Message)
     ListUI.Visible = false
-    PromptUI.Visible = false
+    PromptUI.Visible = true
 
     PromptUI.Message.Text = Message
 
     Response = nil
+    print("Waiting")
     repeat wait() until Response ~= nil -- Will wait until one of the buttons is pressed
 
     PromptUI.Visible = false
@@ -71,28 +96,31 @@ end
 
 function NewScript()
     if IsEditing then return end
-
-    IsEditing = true
     CurrentScript = PluginFolder.Template:Clone()
-    plugin:OpenScript(CurrentScript)
+    Edit("YourFunction")
+end
 
-    DoneUI.Visible = true
-    ListUI.Visible = false
+function LoadScript(Source, Parse)
+    CurrentScript = Instance.new("ModuleScript")
+    CurrentScript.Source = Source..(Parse and "\n\n"..PluginFolder.Parser.Source or "")
+    return Parse and require(CurrentScript)
+end
+
+function EditScript(FunctionName)
+    LoadScript(SavedFunctions[FunctionName])
+    Edit(FunctionName)
 end
 
 function SaveScript()
-    if not IsEditing or not DoneUI.Visible then return end
+    if not DoneUI.Visible then return end
 
     DoneUI.Visible = false
     -- Close the script
     local Source = CurrentScript.Source
     CurrentScript:Destroy()
     -- Load the script
-    local NewScript = Instance.new("ModuleScript")
-    NewScript.Source = Source.."\n\n"..PluginFolder.Parser.Source
-
-    local Result = require(NewScript)
-    local Exists = Functions[FunctionName]
+    local Result = LoadScript(Source, true)
+    local Exists = SavedFunctions[FunctionName] == nil
     -- If there was no function written
     if not Result then warn("No function was found!"); IsEditing = false return end
 
@@ -111,6 +139,12 @@ function SaveScript()
 
     ListUI.Visible = true
     IsEditing = false
+end
+
+-- Load in functions from storage
+for FunctionName,Source in pairs(SavedFunctions) do
+    Functions[FunctionName] = LoadScript(Source, true)[2]
+    AddEntry(FunctionName)
 end
 
 PromptUI.Yes.Activated:Connect(function() Response = true end)
