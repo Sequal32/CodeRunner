@@ -52,9 +52,11 @@ function AddEntry(FunctionName)
         local Selection = game.Selection:Get()
         local Function = Functions[FunctionName]
 
+        Function.Setup()
         for _,Object in pairs(Selection) do
-            Function(Object)
+            Function.Main(Object)
         end
+        Function.Teardown()
     end)
 
     Buttons.Edit.Activated:Connect(function()
@@ -151,15 +153,15 @@ function SaveScript()
     if not Success then Notify(Message); IsEditing = false return end
 
     -- If there was no function written
-    if not Result then Notify("You have not written a function!"); IsEditing = false return end
+    if not Result.Main then Notify("You have not written a function!"); IsEditing = false return end
     
-    local FunctionName, Function = unpack(Result)
+    local FunctionName = Result.FName
     local Exists = SavedFunctions[FunctionName] ~= nil
     -- If we're about to overwrite a function
     if Exists and not Prompt("Overwrite "..FunctionName.."?") then IsEditing = false return end
     
     SavedFunctions[FunctionName] = Source
-    Functions[FunctionName] = Function
+    Functions[FunctionName] = Result
 
     if not Exists then
         AddEntry(FunctionName)
@@ -176,7 +178,7 @@ for FunctionName,Source in pairs(SavedFunctions) do
     local Success, _, Result = LoadScript(Source, true)
 
     if Success then
-        Functions[FunctionName] = Result[2]
+        Functions[FunctionName] = Result
         AddEntry(FunctionName)
     else
         SavedFunctions[FunctionName] = nil
