@@ -1,3 +1,5 @@
+-- Services
+local LS = game:GetService("LocalizationService")
 -- Paths
 local PluginFolder = script.Parent
 -- UIs
@@ -116,11 +118,12 @@ end
 function NewScript()
     if IsEditing then return end
     CurrentScript = PluginFolder.Template:Clone()
+    CurrentScript.Parent = LS
     Edit("YourFunction")
 end
 
 function LoadScript(Source, Parse)
-    CurrentScript = Instance.new("ModuleScript")
+    CurrentScript = Instance.new("ModuleScript", LS)
     CurrentScript.Source = Source..(Parse and "\n\n"..PluginFolder.Parser.Source or "")
 
     if Parse then
@@ -176,6 +179,7 @@ end
 -- Load in functions from storage
 for FunctionName,Source in pairs(SavedFunctions) do
     local Success, _, Result = LoadScript(Source, true)
+    CurrentScript:Destroy()
 
     if Success then
         Functions[FunctionName] = Result
